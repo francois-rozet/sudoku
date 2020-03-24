@@ -116,31 +116,26 @@ if __name__ == '__main__':
 	import argparse
 	import os
 
-	from solver import Solver
+	from solver import Solver, Unsolver
 
 	# Parser
 	parser = argparse.ArgumentParser(description='Sudoku Solver')
 	parser.add_argument('-d', '--destination', default='images')
 	parser.add_argument('-o', '--output', default='sudoku')
-	parser.add_argument('-n', '--number', type=int, default=100,)
-	parser.add_argument('-r', '--remove', type=float, default=0.5)
-	parser.add_argument('-s', '--size', type=int, default=3)
+	parser.add_argument('-n', '--number', type=int, default=100)
 	args = parser.parse_args()
 
 	os.makedirs(args.destination, exist_ok=True)
 	filename = os.path.join(args.destination, args.output) + '_{:04}'
 
 	# Grids
-	grid = np.zeros((args.size ** 2, args.size ** 2), dtype=int)
+	grid = np.zeros((9, 9), dtype=int)
 
 	for i in range(1, args.number + 1):
 		for solution in Solver(grid, shuffle=True):
 			break
 
-		## Remove some figures
-		for index in np.ndindex(solution.shape):
-			if random.random() < args.remove:
-				solution[index] = 0
+		solution = Unsolver(solution)()
 
 		## Save
 		basename = filename.format(i)
