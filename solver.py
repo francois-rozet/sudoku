@@ -50,7 +50,7 @@ class Cell:
 
 
 class Sudoku:
-	def __init__(self, grid):
+	def __init__(self, grid, exceptions={}):
 		# Grid
 		self.grid = grid.copy()
 
@@ -63,7 +63,12 @@ class Sudoku:
 		self.cells = []
 
 		for index, value in np.ndenumerate(self.grid):
-			self.cells.append(Cell(index, self.grid, domain))
+			exception = exceptions.get(index)
+			self.cells.append(Cell(
+				index,
+				self.grid,
+				domain.difference(exception) if exception else domain
+			))
 
 		# Families
 		for i in range(ndim):
@@ -87,15 +92,15 @@ class Sudoku:
 
 
 class Solver:
-	def __init__(self, grid, shuffle=True):
-		self.sudoku = Sudoku(grid)
+	def __init__(self, grid, shuffle=True, exceptions={}):
+		self.sudoku = Sudoku(grid, exceptions)
 
 		# Free cells
-		self.free, self.guesses = [], []
-
-		for cell in self.sudoku.cells:
-			if cell.empty():
-				self.free.append(cell)
+		self.free = list(filter(
+			lambda x: x.empty(),
+			self.sudoku.cells
+		))
+		self.guesses = []
 
 		if shuffle:
 			np.random.shuffle(self.free)
@@ -131,40 +136,34 @@ class Unsolver:
 	def __init__(self, grid, shuffle=True):
 		self.sudoku = Sudoku(grid)
 
-		# Full cells
-		self.full = []
-
-		for cell in self.sudoku.cells:
-			if not cell.empty():
-				self.full.append(cell)
+		# Filled cells
+		self.filled = list(filter(
+			lambda x: not x.empty(),
+			self.sudoku.cells
+		))
 
 		if shuffle:
-			np.random.shuffle(self.full)
+			np.random.shuffle(self.filled)
 
 	def __call__(self):
 		if not self.sudoku.valid():
 			raise ValueError('Invalid Grid')
 
-		self.full.sort(key=len, reverse=True)
+		self.filled.sort(key=len, reverse=True)
 
-		for i in reversed(range(len(self.full))):
-			cell = self.full[i]
+		while self.filled:
+			cell = self.filled.pop()
 			value = cell.value
 			cell.renew(0)
 
-			if len(cell.options) == 1:
-				self.full.pop(i)
-			else:
+			if len(cell.options) > 1:
 				n = 0
-				for _ in Solver(self.sudoku.grid):
+				for _ in Solver(self.sudoku.grid, exceptions={cell.index: {value}}):
 					n += 1
-					if n > 1:
-						break
+					break
 
-				if n > 1:
+				if n > 0:
 					cell.renew(value)
-				else:
-					self.full.pop(i)
 
 		return self.sudoku.grid
 
