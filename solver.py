@@ -12,160 +12,163 @@ import numpy as np
 # Classes #
 ###########
 
-class Cell:
-	def __init__(self, index, grid, domain):
-		self.index = index
-		self.grid = grid
-		self.value = self.grid[self.index]
+class Sudoku:
+	def __init__(self, n=3, d=2, grid=None):
+		if grid is None:
+			self.n = n
+			self.d = d
+			self.N = n ** d
+		else:
+			self.N = grid.shape[0]
+			self.d = len(grid.shape)
+			self.n = int(self.N ** (1. / self.d))
 
-		self.domain = domain
+		self.grid = np.zeros((self.N,) * self.d, dtype=int)
+		self.counter = np.zeros(self.grid.shape + (self.N + 1,), dtype=int)
+		self.counter[..., 0] = self.N
 
-		self.families = []
-		self.options = set()
+		if grid is not None:
+			for key, value in np.ndenumerate(grid):
+				self[key] = value
 
 	def __len__(self):
-		return len(self.options)
-
-	def empty(self):
-		return self.value == 0
-
-	def valid(self):
-		return self.empty() or self.value in self.options
-
-	def update(self):
-		self.options = self.domain.copy()
-
-		for family in self.families:
-			for cell in family:
-				if cell != self and not cell.empty():
-					self.options.discard(cell.value)
-
-	def renew(self, value):
-		self.value = self.grid[self.index] = value
-
-		for family in self.families:
-			for cell in family:
-				if cell.empty():
-					cell.update()
-
-
-class Sudoku:
-	def __init__(self, grid, exceptions={}):
-		# Grid
-		self.grid = grid.copy()
-
-		ndim = len(self.grid.shape)
-		N = self.grid.shape[0]
-		n = int(N ** (1. / ndim))
-		domain = set(range(1, 1 + N))
-
-		# Cells
-		self.cells = []
-
-		for index, value in np.ndenumerate(self.grid):
-			exception = exceptions.get(index)
-			self.cells.append(Cell(
-				index,
-				self.grid,
-				domain.difference(exception) if exception else domain
-			))
-
-		# Families
-		for i in range(ndim):
-			rows = [set() for _ in range(N)]
-			for cell in self.cells:
-				j = cell.index[i]
-				rows[j].add(cell)
-				cell.families.append(rows[j])
-
-		blocks = [set() for _ in range(N)]
-		for cell in self.cells:
-			j = sum((x // n) * n ** i for i, x in enumerate(cell.index))
-			blocks[j].add(cell)
-			cell.families.append(blocks[j])
-
-		for cell in self.cells:
-			cell.update()
-
-	def valid(self):
-		return all(cell.valid() for cell in self.cells)
-
-
-class Solver:
-	def __init__(self, grid, shuffle=True, exceptions={}):
-		self.sudoku = Sudoku(grid, exceptions)
-
-		# Free cells
-		self.free = list(filter(
-			lambda x: x.empty(),
-			self.sudoku.cells
-		))
-		self.guesses = []
-
-		if shuffle:
-			np.random.shuffle(self.free)
+		return self.grid.size
 
 	def __iter__(self):
-		if not self.sudoku.valid():
-			raise ValueError('Invalid Grid')
+		return np.ndindex(self.grid.shape)
 
-		if self.free:
-			self.free.sort(key=len, reverse=True)
-			self.guesses.append(self.free.pop())
+	def __getitem__(self, key):
+		'''Get cell's value.'''
+		return self.grid[key]
 
-		while self.guesses:
-			cell = self.guesses.pop()
+	def __setitem__(self, key, value):
+		'''Set cell's value.'''
 
-			# Renew cell value
-			cell.renew(cell.options.pop() if cell.options else 0)
+		if not self.valid(key, value):
+			print(self.grid)
+			print(self.counter[key])
+			raise ValueError('Invalid value {} for cell {}'.format(value, key))
 
-			# Select next cell
-			if not cell.empty():
-				self.guesses.append(cell)
+		# Update rows counters
+		for i in range(self.d):
+			row = self.counter[key[:i] + (slice(self.N),) + key[i+1:]]
 
-				if self.free:
-					self.free.sort(key=len, reverse=True)
-					self.guesses.append(self.free.pop())
-				else:
-					yield self.sudoku.grid
+			row[:, self[key]] -= 1
+			if value != 0:
+				row[:, value] += 1
+
+			## Number of options
+			row[:, 0] = np.sum(row[:, :] == 0, axis=1)
+
+		# Update block counters
+		temp = np.array(key)
+		temp -= temp % self.n
+		block = self.counter[tuple([slice(i, j) for i, j in zip(temp, temp + self.n)])]
+
+		block[..., self[key]] -= 1
+		if value != 0:
+			block[..., value] += 1
+
+		## Number of options
+		block[..., 0] = np.sum(block == 0, axis=self.d)
+
+		# Update cell
+		self.counter[key][self[key]] = 0
+		if value != 0:
+			self.counter[key][value] = 0
+
+		## Number of options
+		self.counter[key][0] = np.sum(self.counter[key] == 0)
+
+		self.grid[key] = value
+
+	def empty(self, key):
+		'''State if cell is empty.'''
+		return self[key] == 0
+
+	def options(self, key):
+		'''Get cell's value options.'''
+		return (np.argwhere(self.counter[key][1:] == 0).ravel() + 1).tolist()
+
+	def valid(self, key, value):
+		'''State if value is a valid cell's value option.'''
+		return value == 0 or self.counter[key][value] == 0
+
+	def solve(self, shuffle=True):
+		'''Iterate over all solutions.'''
+		guesses = []
+		backprop = False
+
+		while True:
+			if not backprop:
+				# If current grid is a solution
+				if np.all(self.grid != 0):
+					yield self.grid.copy()
+				# If current grid is not impossible
+				elif np.all(self.counter[..., 0] != 0):
+					noptions = self.counter[..., 0] + (self.grid != 0) * self.N
+
+					## Choose guessed cell
+					key = np.unravel_index(np.argmin(noptions), self.grid.shape)
+
+					if shuffle:
+						keys = np.argwhere(noptions == noptions[key])
+						key = tuple(keys[np.random.randint(len(keys))])
+
+					guesses.append((key, self.options(key)))
 			else:
-				self.free.append(cell)
+				backprop = False
 
+			# If currently guessing
+			if guesses:
+				key, options = guesses.pop()
 
-class Unsolver:
-	def __init__(self, grid, shuffle=True):
-		self.sudoku = Sudoku(grid)
+				## If there is still value options
+				if options:
+					self[key] = options.pop()
+					guesses.append((key, options))
+				else:
+					self[key] = 0
+					backprop = True
+			else:
+				break
 
-		# Filled cells
-		self.filled = list(filter(
-			lambda x: not x.empty(),
-			self.sudoku.cells
-		))
+	def unsolve(self, shuffle=True):
+		'''Return a minimal subgrid that respects uniqueness.'''
+
+		subgrid = Sudoku(n=self.n, d=self.d)
+
+		# Order according to number of value options
+		noptions = self.counter[..., 0]
 
 		if shuffle:
-			np.random.shuffle(self.filled)
+			order = np.random.permutation(noptions.size)
+			keys = order[np.argsort(-noptions.ravel()[order])]
+		else:
+			keys = np.argsort(-noptions.ravel())
 
-	def __call__(self):
-		if not self.sudoku.valid():
-			raise ValueError('Invalid Grid')
+		# Empty cells
+		for key in zip(*np.unravel_index(keys, self.grid.shape)):
+			if self.empty(key):
+				continue
 
-		self.filled.sort(key=len, reverse=True)
+			if noptions[key] > 1:
+				np.copyto(subgrid.grid, self.grid)
+				np.copyto(subgrid.counter, self.counter)
 
-		while self.filled:
-			cell = self.filled.pop()
-			value = cell.value
-			cell.renew(0)
+				## Empty cell & add value exception
+				subgrid[key] = 0
+				subgrid.counter[key][self[key]] = 1
 
-			if len(cell.options) > 1:
-				n = 0
-				for _ in Solver(self.sudoku.grid, exceptions={cell.index: {value}}):
-					n += 1
+				## If there exists other solutions
+				for _ in subgrid.solve():
 					break
+				else:
+					self[key] = 0
+			else:
+				self[key] = 0
 
-				if n > 0:
-					cell.renew(value)
-
-		return self.sudoku.grid
+		return self.grid.copy()
 
 
 ########
@@ -191,28 +194,21 @@ if __name__ == '__main__':
 
 	# Load
 	if args.file is None:
-		grid = np.zeros((9, 9), dtype=int)
+		sudoku = Sudoku(n=3, d=2)
 	else:
-		grid = np.loadtxt(args.file, dtype=int, delimiter=args.sep)
+		sudoku = Sudoku(grid=np.loadtxt(args.file, dtype=int, delimiter=args.sep))
 
 	# Solutions
-	if args.unsolved and args.file is not None:
+	for solution in sudoku.solve():
 		np.savetxt(
 			sys.stdout,
-			Unsolver(grid)(),
-			fmt='%0{}d'.format(int(np.log10(grid.shape[0])) + 1),
+			Sudoku(grid=solution).unsolve() if args.unsolved else solution,
+			'%0{}d'.format(int(np.log10(sudoku.N)) + 1),
 			delimiter=args.sep
 		)
-	else:
-		for i, solution in enumerate(Solver(grid)):
-			if i == args.number:
-				break
-			elif i > 0:
-				print(end='\n')
 
-			np.savetxt(
-				sys.stdout,
-				Unsolver(solution)() if args.unsolved else solution,
-				'%0{}d'.format(int(np.log10(grid.shape[0])) + 1),
-				delimiter=args.sep
-			)
+		if args.number > 1:
+			args.number -= 1
+			print(end='\n')
+		else:
+			break

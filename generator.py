@@ -116,7 +116,7 @@ if __name__ == '__main__':
 	import argparse
 	import os
 
-	from solver import Solver, Unsolver
+	from solver import Sudoku
 
 	# Parser
 	parser = argparse.ArgumentParser(description='Sudoku Solver')
@@ -129,13 +129,11 @@ if __name__ == '__main__':
 	filename = os.path.join(args.destination, args.output) + '_{:04}'
 
 	# Grids
-	grid = np.zeros((9, 9), dtype=int)
-
 	for i in range(1, args.number + 1):
-		for solution in Solver(grid, shuffle=True):
+		for solution in Sudoku(n=3, d=2).solve(shuffle=True):
 			break
 
-		solution = Unsolver(solution)()
+		solution = Sudoku(grid=solution).unsolve()
 
 		## Save
 		basename = filename.format(i)
