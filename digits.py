@@ -8,6 +8,9 @@
 import cv2
 import numpy as np
 import scipy.interpolate as spi
+import torch
+
+from torchvision import transforms
 
 
 #############
@@ -260,3 +263,78 @@ def split(img, nrows=9, ncols=9, padding=(3, 3), reshape=None):
 				split = cv2.resize(split, reshape)
 
 			yield split
+
+
+def digits(img, model):
+	"""Classify grid digits.
+
+	Parameters
+	----------
+	img : numpy.uint8
+		image
+	model : torch.nn.Module
+		digit classifier
+
+	Returns
+	-------
+	numpy.array
+		grid digits
+	"""
+
+	transform = transforms.Compose([
+		transforms.ToTensor(),
+		transforms.Normalize((0.1307,), (0.3081,))
+	])
+
+	model.eval()
+
+	with torch.no_grad():
+		batch = torch.stack([
+			transform(255 - x) for x in split(img, reshape=(28, 28))
+		])
+
+		if torch.cuda.is_available():
+			batch = batch.cuda()
+
+		output = model(batch)
+
+	dgts = torch.argmax(output, dim=1).cpu().reshape(9, 9).numpy()
+	dgts[dgts == 10] = 0
+
+	return dgts
+
+
+########
+# Main #
+########
+
+if __name__ == '__main__':
+	# Imports
+	import sys
+
+	from model import RozNet
+
+	# Model
+	model = RozNet()
+
+	if torch.cuda.is_available():
+		device = torch.device('cuda')
+	else:
+		device = torch.device('cpu')
+
+	model = model.to(device)
+	model.load_state_dict(torch.load('products/weights/roznet.pth', map_location=device))
+
+	# Process
+	for imgname in sys.argv[1:]:
+		img = load(imgname)
+		img = preprocess(img)
+		img = detect(img)
+		img = straighten(img)
+
+		# Digits
+		dgts = digits(img, model)
+		np.savetxt(sys.stdout, dgts, fmt='%d', delimiter=' ')
+
+		if imgname != sys.argv[-1]:
+			print()
