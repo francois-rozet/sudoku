@@ -326,11 +326,36 @@ if __name__ == '__main__':
 	model.load_state_dict(torch.load('products/weights/roznet.pth', map_location=device))
 
 	# Process
+	verbose = False
+
 	for imgname in sys.argv[1:]:
+		if imgname == '-v':
+			verbose = True
+			continue
+
 		img = load(imgname)
+
+		if verbose:
+			cv2.imshow('0 - Original', img)
+			cv2.waitKey()
+
 		img = preprocess(img)
+
+		if verbose:
+			cv2.imshow('1 - Preprocessed', img)
+			cv2.waitKey()
+
 		img = detect(img)
+
+		if verbose:
+			cv2.imshow('2 - Isolated', img)
+			cv2.waitKey()
+
 		img = straighten(img)
+
+		if verbose:
+			cv2.imshow('3 - Straightened', img)
+			cv2.waitKey()
 
 		# Digits
 		dgts = digits(img, model)

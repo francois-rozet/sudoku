@@ -58,6 +58,8 @@ It should be noted that the whole neural network is loaded each time the script 
 python python/digits.py <image0> <image1> <image2> ...
 ```
 
+You can also use the flag `-v` to display the intermediate processing steps.
+
 ## Annotated Sudoku grid database
 
 This repository also contains Sudoku grid pictures, each with an associated `.dat` file reprensenting the digits in the grid.
