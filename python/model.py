@@ -5,12 +5,16 @@
 # Imports #
 ###########
 
+import csv
+import os
 import torch
 import torch.nn as nn
 
 from PIL import Image
 from torch.utils import data
 from torchvision import datasets
+
+from generator import base64ToPIL
 
 
 #############
@@ -45,16 +49,19 @@ class RozNet(nn.Module):
 	def __init__(self):
 		super().__init__()
 
-		self.C1 = DoubleConvolution(1, 8, 5, 2)
+		self.C1 = DoubleConvolution(1, 16, 5, 2)
 		self.S1 = nn.MaxPool2d(2)
 
-		self.C2 = DoubleConvolution(8, 16, 5, 2)
+		self.C2 = DoubleConvolution(16, 32, 5, 2)
 		self.S2 = nn.MaxPool2d(2)
 
-		self.F1 = FullConnection(784, 392)
-		self.F2 = FullConnection(392, 196)
+		self.C3 = DoubleConvolution(32, 64, 5, 2)
+		self.S3 = nn.MaxPool2d(2)
 
-		self.last = nn.Linear(196, 11)
+		self.F1 = FullConnection(576, 288)
+		self.F2 = FullConnection(288, 144)
+
+		self.last = nn.Linear(144, 11)
 		self.soft = nn.Softmax(dim=1)
 
 	def head(self, x):
@@ -70,6 +77,9 @@ class RozNet(nn.Module):
 		x = self.C2(x)
 		x = self.S2(x)
 
+		x = self.C3(x)
+		x = self.S3(x)
+
 		# Classification
 		x = torch.flatten(x, 1)
 
@@ -79,21 +89,28 @@ class RozNet(nn.Module):
 		return self.head(x)
 
 
-class GaussianNoise(object):
+class GaussianNoise(nn.Module):
 	'''Pixelwise Gaussian noise transform.'''
 
 	def __init__(self, mean=0., std=1.):
+		super().__init__()
+
 		self.std = std
 		self.mean = mean
 
-	def __call__(self, tensor):
-		return tensor + torch.randn(tensor.size()) * self.std + self.mean
+	def forward(self, x):
+		return torch.clamp(
+			x + torch.randn(x.size()) * self.std + self.mean,
+			min=0.,
+			max=1.
+		)
 
 
 class AQMNIST(data.Dataset):
 	"""Augmented QMNIST.
 
-	The augmentation consists in adding empty images, i.e. without digit.
+	The augmentation consists in adding empty images, i.e. without digit,
+	as well as printed digits (not handwritten) with various fonts.
 
 	References
 	----------
@@ -104,19 +121,38 @@ class AQMNIST(data.Dataset):
 
 	black = Image.new('L', (28, 28))
 
-	def __init__(self, n=10000, transform=lambda x: x, what='train'):
+	def __init__(self, transform=lambda x: x, what='train'):
 		super().__init__()
 
-		self.qmnist = datasets.QMNIST(root='resources/qmnist/', what=what, download=True)
-		self.n = n
 		self.transform = transform
+		self.qmnist = datasets.QMNIST(root='resources/qmnist/', what=what, download=True)
+
+		self.printed = []
+
+		if os.path.exists('resources/csv/printed_digits.csv'):
+			with open('resources/csv/printed_digits.csv', 'r') as f:
+				reader = csv.reader(f, delimiter=',')
+
+				for row in reader:
+					self.printed.append((
+						base64ToPIL(row[2]).convert('L'),
+						int(row[1])
+					))
+
+		self.printed = [
+			x
+			for i, x in enumerate(self.printed)
+			if (i % 5 == 0) == (what == 'test')
+		]
 
 	def __len__(self):
-		return len(self.qmnist) + self.n
+		return len(self.qmnist) + len(self.printed) + len(self.qmnist) // 10
 
 	def __getitem__(self, i):
 		if i < len(self.qmnist):
 			inpt, targt = self.qmnist[i]
+		elif i < len(self.qmnist) + len(self.printed):
+			inpt, targt = self.printed[i - len(self.qmnist)]
 		else:
 			inpt, targt = self.black, 10
 
@@ -131,7 +167,6 @@ if __name__ == '__main__':
 	# Imports
 	import argparse
 	import numpy as np
-	import os
 	import time
 
 	from torch.optim import Adam, lr_scheduler
@@ -141,7 +176,9 @@ if __name__ == '__main__':
 	parser = argparse.ArgumentParser(description='Train model')
 	parser.add_argument('-o', '--output', default='products/weights/roznet.pth', help='output weights file')
 	parser.add_argument('-bsize', type=int, default=64, help='batch size')
-	parser.add_argument('-epochs', type=int, default=20, help='number of epochs')
+	parser.add_argument('-epochs', type=int, default=15, help='number of epochs')
+	parser.add_argument('-step', type=int, default=5, help='step size')
+	parser.add_argument('-gamma', type=float, default=1e-1, help='gamma')
 	parser.add_argument('-lrate', type=float, default=1e-2, help='learning rate')
 	parser.add_argument('-wdecay', type=float, default=0., help='weight decay')
 	args = parser.parse_args()
@@ -151,22 +188,20 @@ if __name__ == '__main__':
 
 	criterion = nn.CrossEntropyLoss()
 	optimizer = Adam(model.parameters(), lr=args.lrate, weight_decay=args.wdecay)
-	scheduler = lr_scheduler.StepLR(optimizer, step_size=5, gamma=1e-1)
+	scheduler = lr_scheduler.StepLR(optimizer, step_size=args.step, gamma=args.gamma)
 
 	if torch.cuda.is_available():
 		model = model.cuda()
 		criterion = criterion.cuda()
 
 	# Training set
-	norm = transforms.Compose([
-		transforms.ToTensor(),
-		transforms.Normalize((0.1307,), (0.3081,))
-	])
+	norm = transforms.ToTensor()
 
 	transform = transforms.Compose([
-		transforms.RandomAffine(degrees=30, translate=(0.1, 0.1), scale=(0.8, 1.2)),
+		transforms.ColorJitter(brightness=0.2, contrast=0.2),
+		transforms.RandomAffine(degrees=15, translate=(0.1, 0.1), scale=(0.8, 1.2)),
 		norm,
-		GaussianNoise(mean=0., std=0.33)
+		GaussianNoise(mean=0., std=0.15)
 	])
 
 	trainset = AQMNIST(transform=transform, what='train')
@@ -178,7 +213,7 @@ if __name__ == '__main__':
 	# Training
 	for epoch in range(args.epochs):
 		print('-' * 10)
-		print('Epoch {}, lr = {}'.format(epoch, scheduler.get_lr()[0]))
+		print('Epoch {}, lr = {}'.format(epoch, scheduler.get_last_lr()[0]))
 
 		start = time.time()
 

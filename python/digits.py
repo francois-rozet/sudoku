@@ -281,10 +281,7 @@ def digits(img, model):
 		grid digits
 	"""
 
-	transform = transforms.Compose([
-		transforms.ToTensor(),
-		transforms.Normalize((0.1307,), (0.3081,))
-	])
+	transform = transforms.ToTensor()
 
 	model.eval()
 

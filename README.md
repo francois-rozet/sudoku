@@ -4,6 +4,8 @@ Nowadays, Sudoku solvers are literally everywhere. However, they are often tedio
 
 The grid detection is performed with *Computer Vision* techniques using the [`OpenCV`](https://opencv.org/) tools, while the digit recognition/classification is implemented as a *Convolutional Neural Network* based on [`PyTorch`](https://pytorch.org/) framework.
 
+For the training of the latter, the [`QMNIST`](https://github.com/facebookresearch/qmnist) dataset is used. However, it is augmented with blank images as well as printed digits ([`printed_digits.csv`](resources/csv/printed_digits.csv)) generated with `445` fonts.
+
 ## Dependencies
 
 If you plan to run the scripts of this repository, you will need to install several `Python` packages including `torch`, `torchvision`, `opencv`, `scipy` and their dependencies.
@@ -50,7 +52,7 @@ python python/digits.py resources/images/empty/empty_0042.jpg
 9 0 0 2 0 8 0 0 5
 ```
 
-> There might be digits that are miss-classified. Most notably, it is not uncommon for the network to classify a `1` as a `7`. This should be improved in later releases.
+> Predictions are not always perfect, there might be digits that are miss-classified.
 
 It should be noted that the whole neural network is loaded each time the script is called, which takes more time than the actual detection. To amortize this cost, prefer calling the script with several input images.
 

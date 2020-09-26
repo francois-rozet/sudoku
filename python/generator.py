@@ -5,6 +5,7 @@
 # Imports #
 ###########
 
+import base64
 import cairo
 import io
 import numpy as np
@@ -33,6 +34,59 @@ def findAllFonts():
 					break
 
 	return list(fonts)
+
+
+def base64ToPIL(x):
+	return Image.open(io.BytesIO(base64.b64decode(x.encode())))
+
+
+def base64FromPIL(x):
+	f = io.BytesIO()
+	x.save(f, format='PNG')
+	return base64.b64encode(f.getvalue()).decode()
+
+
+def buildPrintedDigits(filename, size=28):
+	import csv
+
+	with open(filename, 'w', newline='') as f:
+		writer = csv.writer(f)
+
+		with cairo.ImageSurface(cairo.Format.RGB24, size, size) as surface:
+			ctx = cairo.Context(surface)
+			ctx.scale(size, size)
+
+			for font in findAllFonts():
+				## Select Font
+				ctx.select_font_face(
+					font,
+					cairo.FONT_SLANT_NORMAL,
+					cairo.FONT_WEIGHT_NORMAL
+				)
+				ctx.set_font_size(0.9)
+
+				for digit in range(10):
+					### Fill background
+					ctx.rectangle(0, 0, 1, 1)
+					ctx.set_source_rgb(0, 0, 0)
+					ctx.fill()
+					ctx.set_source_rgb(1, 1, 1)
+
+					### Write digit
+					_, _, width, height, _, _ = ctx.text_extents(str(digit))
+					ctx.move_to(0.5 - width / 2, 0.5 + height / 2)
+					ctx.show_text(str(digit))
+
+					### Export
+					g = io.BytesIO()
+					surface.write_to_png(g)
+					img = Image.open(g).convert('L')
+
+					writer.writerow([
+						font,
+						digit,
+						base64FromPIL(img)
+					])
 
 
 def draw(grid, font, size=1024):
@@ -103,7 +157,7 @@ def draw(grid, font, size=1024):
 			if number == 0:
 				continue
 
-			x, y, width, height, dx, dy = ctx.text_extents(str(number))
+			_, _, width, height, _, _ = ctx.text_extents(str(number))
 
 			ctx.move_to(start + (j + 1 / 2) * step - width / 2, start + (i + 1 / 2) * step + height / 2)
 			ctx.show_text(str(number))
