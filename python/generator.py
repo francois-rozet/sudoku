@@ -6,30 +6,36 @@
 ###########
 
 import cairo
+import io
 import numpy as np
 import random
 
-
-##############
-# Parameters #
-##############
-
-FONTS = [
-	'Arial',
-	'Cambria',
-	'Comic Sans MS',
-	'Courier New',
-	'Ink Free',
-	'Lato',
-	'Segoe Print'
-]
+from PIL import Image
 
 
 #############
 # Functions #
 #############
 
-def draw(filename, grid, size=1024):
+def findAllFonts():
+	import matplotlib.font_manager as fm
+	from fontTools.ttLib import TTFont
+
+	fonts = set()
+
+	for font in fm.findSystemFonts():
+		if font.endswith(('.ttf', '.TTF')):
+			for table in TTFont(font)['cmap'].tables:
+				if table.cmap.get(ord('0')) == 'zero':
+					fonts.add(
+						fm.FontProperties(fname=font).get_name()
+					)
+					break
+
+	return list(fonts)
+
+
+def draw(grid, font, size=1024):
 	with cairo.ImageSurface(cairo.Format.RGB24, size, size) as surface:
 		ctx = cairo.Context(surface)
 		ctx.scale(size, size)
@@ -87,7 +93,7 @@ def draw(filename, grid, size=1024):
 
 		# Numbers
 		ctx.select_font_face(
-			random.choice(FONTS),
+			font,
 			cairo.FONT_SLANT_NORMAL,
 			cairo.FONT_WEIGHT_NORMAL
 		)
@@ -102,9 +108,10 @@ def draw(filename, grid, size=1024):
 			ctx.move_to(start + (j + 1 / 2) * step - width / 2, start + (i + 1 / 2) * step + height / 2)
 			ctx.show_text(str(number))
 
-		surface.write_to_png(filename)
+		f = io.BytesIO()
+		surface.write_to_png(f)
 
-	return filename
+	return Image.open(f)
 
 
 ########
@@ -128,6 +135,9 @@ if __name__ == '__main__':
 	os.makedirs(args.destination, exist_ok=True)
 	filename = os.path.join(args.destination, args.output) + '_{:04}'
 
+	# Fonts
+	fonts = findAllFonts()
+
 	# Grids
 	for i in range(1, args.number + 1):
 		for solution in Sudoku(n=3, d=2).solve(shuffle=True):
@@ -135,7 +145,11 @@ if __name__ == '__main__':
 
 		solution = Sudoku(grid=solution).unsolve()
 
+		## Draw
+		img = draw(solution, random.choice(fonts))
+
 		## Save
 		basename = filename.format(i)
+
+		img.save(basename + '.jpg')
 		np.savetxt(basename + '.dat', solution, fmt='%d')
-		draw(basename + '.png', solution)
