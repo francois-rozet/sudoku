@@ -13,10 +13,10 @@ To do so safely, one should create a new environement :
 ```bash
 virtualenv ~/sudoku -p python3
 source ~/sudoku/bin/activate
-pip3 install -r requirements.txt -y
+pip install -r requirements.txt -y
 ```
 
-or with `Anaconda`
+or with the `conda` package manager
 
 ```bash
 conda env create -f environment.yml
@@ -100,7 +100,7 @@ Because it depends on the `cairo` C library, the installation of `pycairo` isn't
     2. Install `pycairo` using `pip`.
 
         ```bash
-        pip3 install pycairo
+        pip install pycairo
         ```
 
 * `macOS`
@@ -120,7 +120,7 @@ Because it depends on the `cairo` C library, the installation of `pycairo` isn't
     3. Install `pycairo` using `pip`.
 
         ```bash
-        pip3 install pycairo
+        pip install pycairo
         ```
 
 * `Windows`
