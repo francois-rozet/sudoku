@@ -8,7 +8,7 @@ For the training of the latter, the [`QMNIST`](https://github.com/facebookresear
 
 ## Dependencies
 
-If you plan to run the scripts of this repository, you will need to install several `Python` packages including `torch`, `torchvision`, `opencv`, `scipy` and their dependencies.
+If you plan to run the scripts of this repository, you will need to install several `Python` packages including `torch`, `torchvision`, `opencv`, `scipy`, etc. and their dependencies.
 
 To do so safely, one should create a new environement :
 
@@ -22,6 +22,7 @@ or with the `conda` package manager
 
 ```bash
 conda env create -f environment.yml
+conda activate sudoku
 ```
 
 ## Usage
@@ -88,8 +89,6 @@ The script [`generator.py`](python/generator.py) generates random sudoku grids i
 
 The graphics are produced with the [`pycairo`](https://github.com/pygobject/pycairo) Python library.
 
-The script also requires `numpy`, `matplotlib`, `fonttools` and `pillow` which can be directly installed with `pip` or `conda`.
-
 ## Install `pycairo`
 
 Because it depends on the `cairo` C library, the installation of `pycairo` isn't the same for each platform.
@@ -131,5 +130,5 @@ Because it depends on the `cairo` C library, the installation of `pycairo` isn't
     1. Install it using `conda`.
 
         ```bash
-        conda install -c conda-forge pycairo
+        conda install pycairo
         ```
