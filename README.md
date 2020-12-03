@@ -77,7 +77,7 @@ resources/
    └─ handwritten/
 ```
 
-Each directory contains a different kind of pictures.
+Each directory contains a different kind of pictures. The images from [`empty/`](resources/images/empty/), [`blurry/`](resources/images/blurry/) and [`filled/`](resources/images/filled/), come from the repository [`wichtounet/sudoku_dataset`](https://github.com/wichtounet/sudoku_dataset).
 
 > Grids from the [`handwritten/`](resources/images/handwritten/) folder are not solvable grids. However, they can be used for Sudoku grid/digits detection.
 
