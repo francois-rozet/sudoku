@@ -1,6 +1,6 @@
 fonttools==4.15.0
 matplotlib==3.3.2
-numpy==1.19.1
+numpy==1.21.0
 opencv-python==4.4.0.44
 Pillow==9.0.0
 scipy==1.5.2
