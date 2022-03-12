@@ -2,7 +2,7 @@ fonttools==4.15.0
 matplotlib==3.3.2
 numpy==1.21.0
 opencv-python==4.4.0.44
-Pillow==9.0.0
+Pillow==9.0.1
 scipy==1.5.2
 torch==1.5.1
 torchvision==0.6.1
